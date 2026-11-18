@@ -53,12 +53,19 @@ jobs:
           # Clean up any duplicate .kts files
           rm -f build.gradle.kts settings.gradle.kts app/build.gradle.kts 2>/dev/null || true
 
+          # Ensure AndroidX is enabled even if gradle.properties is missing
+          if [ ! -f "gradle.properties" ]; then
+            printf "android.useAndroidX=true\nandroid.enableJetifier=true\n" > gradle.properties
+          elif ! grep -q "android.useAndroidX" gradle.properties; then
+            printf "\nandroid.useAndroidX=true\nandroid.enableJetifier=true\n" >> gradle.properties
+          fi
+
           if [ -f "gradlew" ]; then
             chmod +x gradlew
           fi
 
-          # Build debug APK with clear console output
-          gradle assembleDebug --console=plain --no-daemon
+          # Build debug APK with AndroidX flags & clear console output
+          gradle assembleDebug -Pandroid.useAndroidX=true -Pandroid.enableJetifier=true --console=plain --no-daemon
 
       - name: Upload APK to GitHub Artifacts
         uses: actions/upload-artifact@v4

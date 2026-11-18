@@ -754,13 +754,25 @@ data class ClonedAppModel(
 `,
   },
   {
+    path: 'gradle.properties',
+    name: 'gradle.properties',
+    language: 'properties',
+    description: 'Project-wide Gradle settings enabling AndroidX and Jetifier',
+    content: `org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
+android.useAndroidX=true
+android.enableJetifier=true
+kotlin.code.style=official
+android.nonTransitiveRClass=true
+`,
+  },
+  {
     path: 'gradle/wrapper/gradle-wrapper.properties',
     name: 'gradle-wrapper.properties',
     language: 'properties',
-    description: 'Gradle Wrapper configuration for Gradle 8.3',
+    description: 'Gradle Wrapper configuration for Gradle 8.4',
     content: `distributionBase=GRADLE_USER_HOME
 distributionPath=wrapper/dists
-distributionUrl=https\\://services.gradle.org/distributions/gradle-8.3-bin.zip
+distributionUrl=https\\://services.gradle.org/distributions/gradle-8.4-bin.zip
 networkTimeout=10000
 validateDistributionUrl=true
 `,
