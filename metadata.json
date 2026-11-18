@@ -1,0 +1,6 @@
+{
+  "name": "Narendra App Cloner",
+  "description": "A modern, secure, and powerful Native Android App Cloner and Dual App virtualization suite by Narendra Maurya with multi-account isolation, PIN/Pattern/Biometric app locker, independent storage sandboxing, and full Android Studio Kotlin source code.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
