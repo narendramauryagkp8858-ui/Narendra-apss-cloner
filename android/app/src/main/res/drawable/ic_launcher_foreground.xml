@@ -4,7 +4,16 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Back Cloned Layer -->
     <path
         android:fillColor="#7C3AED"
-        android:pathData="M30,30h48v48h-48z"/>
+        android:pathData="M34,26 L70,26 C74.4,26 78,29.6 78,34 L78,66 C78,70.4 74.4,74 70,74 L34,74 C29.6,74 26,70.4 26,66 L26,34 C26,29.6 29.6,26 34,26 Z" />
+    <!-- Front Cloned Layer -->
+    <path
+        android:fillColor="#2563EB"
+        android:pathData="M42,34 L74,34 C78.4,34 82,37.6 82,42 L82,74 C82,78.4 78.4,82 74,82 L42,82 C37.6,82 34,78.4 34,74 L34,42 C34,37.6 37.6,34 42,34 Z" />
+    <!-- Inner Symbol -->
+    <path
+        android:fillColor="#38BDF8"
+        android:pathData="M56,46 L60,46 L60,56 L70,56 L70,60 L60,60 L60,70 L56,70 L56,60 L46,60 L46,56 L56,56 Z" />
 </vector>

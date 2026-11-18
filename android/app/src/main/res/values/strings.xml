@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Narendra App Cloner</string>
-    <string name="developer_name">Narendra Maurya</string>
+    <string name="app_name">Narendra Apps Cloner</string>
+    <string name="developer_name">By Narendra Maurya</string>
+    <string name="developer_email">narendramauryagkp@gmail.com</string>
+    <string name="splash_tagline">Fast &amp; Clean Multi-App Space</string>
+    <string name="search_hint">Search installed or cloned apps...</string>
 </resources>

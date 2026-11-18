@@ -74,11 +74,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
-            <span className="text-[11px] font-mono text-purple-400 font-bold uppercase tracking-wider">
-              Narendra App Cloner
-            </span>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-mono text-purple-400 font-bold uppercase tracking-wider">
+                Narendra Apps Cloner
+              </span>
+              <span className="text-slate-600">·</span>
+              <span className="text-xs text-blue-300 font-medium">narendramauryagkp@gmail.com</span>
+            </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              App Cloner &amp; Multiple Accounts
+              Narendra Apps Cloner
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 max-w-2xl leading-relaxed">
               Create multiple independent copies of any installed app with custom names, custom 3D icons, and separate local storage.

@@ -1,4 +1,4 @@
-name: Build Narendra App Cloner APK (GitHub Actions)
+name: Build Narendra Apps Cloner APK
 
 on:
   push:
@@ -22,7 +22,7 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Setup Official Gradle 8.4
+      - name: Setup Gradle 8.4
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.4'
@@ -31,7 +31,7 @@ jobs:
         run: |
           yes | sdkmanager --licenses > /dev/null 2>&1 || true
 
-      - name: Locate Android Project & Build APK
+      - name: Build Narendra Apps Cloner APK
         run: |
           TARGET_DIR="."
           if [ -f "settings.gradle" ]; then
@@ -45,34 +45,20 @@ jobs:
             fi
           fi
 
-          echo "=========================================="
           echo "Building Android project in: $TARGET_DIR"
-          echo "=========================================="
           cd "$TARGET_DIR"
 
-          # Clean up any duplicate .kts files
-          rm -f build.gradle.kts settings.gradle.kts app/build.gradle.kts 2>/dev/null || true
-
-          # Ensure AndroidX is enabled even if gradle.properties is missing
           if [ ! -f "gradle.properties" ]; then
             printf "android.useAndroidX=true\nandroid.enableJetifier=true\n" > gradle.properties
-          elif ! grep -q "android.useAndroidX" gradle.properties; then
-            printf "\nandroid.useAndroidX=true\nandroid.enableJetifier=true\n" >> gradle.properties
           fi
 
-          if [ -f "gradlew" ]; then
-            chmod +x gradlew
-          fi
-
-          # Build debug APK with AndroidX flags & clear console output
           gradle assembleDebug -Pandroid.useAndroidX=true -Pandroid.enableJetifier=true --console=plain --no-daemon
 
-      - name: Upload APK to GitHub Artifacts
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: NarendraAppCloner-APK
+          name: NarendraAppsCloner-APK
           path: |
             **/app/build/outputs/apk/debug/*.apk
             **/app/build/outputs/apk/**/*.apk
-            **/*.apk
           retention-days: 30

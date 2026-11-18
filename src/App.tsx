@@ -1,5 +1,5 @@
 /**
- * Narendra App Cloner
+ * Narendra Apps Cloner
  * Developer: Narendra Maurya
  * Email: narendramauryagkp@gmail.com
  */
@@ -16,9 +16,11 @@ import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
 import { CloneModal } from './components/CloneModal';
 import { AppIcon } from './components/AppIcon';
-import { CheckCircle, X, HardDrive, Layers } from 'lucide-react';
+import { CheckCircle, X, HardDrive, Layers, Mail } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState<boolean>(true);
   const [installedApps, setInstalledApps] = useState<InstalledApp[]>(loadInstalledApps);
   const [clones, setClones] = useState<ClonedApp[]>(loadClonedApps);
 
@@ -28,6 +30,14 @@ export default function App() {
 
   // Active launched clone modal
   const [launchedClone, setLaunchedClone] = useState<ClonedApp | null>(null);
+
+  // Splash Screen timer on app open
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 1900);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Save changes to localStorage
   useEffect(() => {
@@ -96,7 +106,52 @@ export default function App() {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-950 text-slate-100">
-      
+
+      {/* Startup Splash Screen ("Narendra Apps Cloner" + Developer Email) */}
+      <AnimatePresence>
+        {showSplash && (
+          <motion.div
+            initial={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.45 }}
+            onClick={() => setShowSplash(false)}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950 px-6 text-center cursor-pointer"
+          >
+            <div className="absolute inset-0 overflow-hidden pointer-events-none">
+              <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl" />
+              <div className="absolute bottom-1/4 left-1/2 -translate-x-1/2 w-80 h-80 bg-blue-600/20 rounded-full blur-3xl" />
+            </div>
+
+            <motion.div
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+              className="relative z-10 flex flex-col items-center space-y-5"
+            >
+              <div className="h-24 w-24 rounded-3xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 p-1 shadow-2xl shadow-purple-500/30 flex items-center justify-center">
+                <div className="h-full w-full rounded-[20px] bg-slate-950/30 flex items-center justify-center">
+                  <Layers className="h-12 w-12 text-white" />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white">
+                  Narendra Apps Cloner
+                </h1>
+                <p className="text-sm font-medium text-sky-400">
+                  By Narendra Maurya
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/90 border border-purple-500/40 text-xs font-medium text-blue-300 shadow-lg">
+                <Mail className="h-3.5 w-3.5 text-purple-400" />
+                <span>narendramauryagkp@gmail.com</span>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Pure App Cloner Top Header */}
       <Header onOpenCloneModal={() => handleOpenCloneModal()} />
 
@@ -156,7 +211,7 @@ export default function App() {
                 <CheckCircle className="h-6 w-6" />
               </div>
               <div>
-                <p className="text-sm font-bold text-white">Clone Instance Active</p>
+                <p className="text-sm font-bold text-white">Narendra Apps Cloner · Active</p>
                 <p className="text-xs text-slate-400 mt-1">
                   Running independently from the original {launchedOriginalApp?.name || 'app'}.
                 </p>
@@ -189,7 +244,7 @@ export default function App() {
       <footer className="mt-auto border-t border-slate-800/80 bg-slate-950 py-5 px-4 sm:px-6 lg:px-8 text-xs text-slate-500">
         <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-semibold text-slate-300">Narendra App Cloner</span>
+            <span className="font-semibold text-slate-300">Narendra Apps Cloner</span>
             <span>·</span>
             <span>Created by Narendra Maurya</span>
           </div>

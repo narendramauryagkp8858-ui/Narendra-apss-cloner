@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/colorSurfaceDark"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Customize App Clone"
+        android:textColor="@color/white"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/tvTargetPackage"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="@color/colorAccentCyan"
+        android:textSize="11sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Custom Clone Name"
+        android:textColor="@color/colorTextSecondary"
+        android:textSize="12sp" />
+
+    <EditText
+        android:id="@+id/etCloneName"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/bg_search_input"
+        android:inputType="text"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textColor="@color/white"
+        android:textSize="14sp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:text="Badge Label (e.g. 2, WORK, VIP)"
+        android:textColor="@color/colorTextSecondary"
+        android:textSize="12sp" />
+
+    <EditText
+        android:id="@+id/etCloneBadge"
+        android:layout_width="match_parent"
+        android:layout_height="44dp"
+        android:layout_marginTop="6dp"
+        android:background="@drawable/bg_search_input"
+        android:inputType="text"
+        android:maxLength="6"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textColor="@color/white"
+        android:textSize="14sp" />
+
+</LinearLayout>

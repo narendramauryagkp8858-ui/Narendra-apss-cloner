@@ -17,7 +17,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenCloneModal }) => {
           </div>
           <div>
             <span className="text-base sm:text-lg font-bold tracking-tight text-white whitespace-nowrap block">
-              Narendra App Cloner
+              Narendra Apps Cloner
             </span>
             <p className="text-[11px] text-slate-400 -mt-0.5">
               By Narendra Maurya

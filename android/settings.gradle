@@ -13,5 +13,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "NarendraAppCloner"
+rootProject.name = "NarendraAppsCloner"
 include ':app'
