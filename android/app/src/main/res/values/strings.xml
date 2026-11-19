@@ -5,4 +5,5 @@
     <string name="developer_email">narendramauryagkp@gmail.com</string>
     <string name="splash_tagline">Fast &amp; Clean Multi-App Space</string>
     <string name="search_hint">Search installed or cloned apps...</string>
+    <string name="device_admin_desc">Enables isolated Work Profile cloning for protected apps</string>
 </resources>

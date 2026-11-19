@@ -65,7 +65,7 @@ object CloneStorageManager {
             .apply()
     }
 
-    fun createClone(
+    fun nextCloneInfo(
         context: Context,
         originalPackageName: String,
         originalAppName: String,
@@ -73,32 +73,40 @@ object CloneStorageManager {
         badgeLabel: String
     ): ClonedAppInfo {
         val existing = loadClones(context)
-        val cloneNumber = existing.count { it.originalPackageName == originalPackageName } + 1
+        val maxNum = existing
+            .filter { it.originalPackageName == originalPackageName }
+            .maxOfOrNull { it.cloneNumber } ?: 0
+        val cloneNumber = maxNum + 1
 
-        val sandboxDir = File(context.filesDir, "cloner_spaces/user_${cloneNumber}_$originalPackageName")
+        val safeOriginalPkg = originalPackageName
+            .split(".")
+            .joinToString(".") { seg ->
+                val cleaned = seg.replace(Regex("[^a-zA-Z0-9_]"), "")
+                if (cleaned.isEmpty() || cleaned[0].isDigit()) "p$cleaned" else cleaned
+            }
+        val clonePkg = "com.narendra.cloner.c$cloneNumber.$safeOriginalPkg"
+        val sandboxDir = File(context.filesDir, "cloner_spaces/c${cloneNumber}_$safeOriginalPkg")
         if (!sandboxDir.exists()) {
             sandboxDir.mkdirs()
-            File(sandboxDir, "data").mkdirs()
-            File(sandboxDir, "cache").mkdirs()
-            File(sandboxDir, "prefs").mkdirs()
         }
 
-        val clonePkg = "com.narendra.cloner.u$cloneNumber.$originalPackageName"
-        val newClone = ClonedAppInfo(
+        return ClonedAppInfo(
             id = "clone_${System.currentTimeMillis()}",
             originalPackageName = originalPackageName,
             originalAppName = originalAppName,
-            cloneName = customName.ifBlank { "$originalAppName ($cloneNumber)" },
+            cloneName = customName.ifBlank { "$originalAppName (Clone $cloneNumber)" },
             clonePackageName = clonePkg,
             cloneNumber = cloneNumber,
-            badgeLabel = badgeLabel.ifBlank { "$cloneNumber" },
+            badgeLabel = badgeLabel.ifBlank { "${cloneNumber + 1}" },
             storagePath = sandboxDir.absolutePath,
             createdAt = System.currentTimeMillis()
         )
+    }
 
-        existing.add(0, newClone)
+    fun saveNewClone(context: Context, clone: ClonedAppInfo) {
+        val existing = loadClones(context).filter { it.clonePackageName != clone.clonePackageName }.toMutableList()
+        existing.add(0, clone)
         saveClones(context, existing)
-        return newClone
     }
 
     fun renameClone(context: Context, cloneId: String, newName: String) {

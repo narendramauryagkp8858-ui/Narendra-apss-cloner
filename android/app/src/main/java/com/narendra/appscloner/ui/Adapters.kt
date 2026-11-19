@@ -1,16 +1,16 @@
 package com.narendra.appscloner.ui
 
 import android.content.pm.PackageManager
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Button
 import android.widget.ImageView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.narendra.appscloner.R
+import com.narendra.appscloner.core.IconCustomizer
 import com.narendra.appscloner.model.ClonedAppInfo
 import com.narendra.appscloner.model.InstalledAppInfo
 
@@ -18,6 +18,7 @@ class ClonedAppsAdapter(
     private var items: List<ClonedAppInfo>,
     private val packageManager: PackageManager,
     private val onOpenClick: (ClonedAppInfo) -> Unit,
+    private val onPinIconClick: (ClonedAppInfo) -> Unit,
     private val onRenameClick: (ClonedAppInfo) -> Unit,
     private val onDeleteClick: (ClonedAppInfo) -> Unit
 ) : RecyclerView.Adapter<ClonedAppsAdapter.CloneViewHolder>() {
@@ -25,9 +26,11 @@ class ClonedAppsAdapter(
     class CloneViewHolder(view: View) : RecyclerView.ViewHolder(view) {
         val ivIcon: ImageView = view.findViewById(R.id.ivCloneIcon)
         val tvBadge: TextView = view.findViewById(R.id.tvCloneBadge)
+        val tvInstallStatus: TextView = view.findViewById(R.id.tvInstallStatus)
         val tvName: TextView = view.findViewById(R.id.tvCloneName)
         val tvPackage: TextView = view.findViewById(R.id.tvClonePackage)
         val btnOpen: Button = view.findViewById(R.id.btnOpenClone)
+        val btnPinIcon: Button = view.findViewById(R.id.btnPinIcon)
         val btnRename: Button = view.findViewById(R.id.btnRenameClone)
         val btnDelete: Button = view.findViewById(R.id.btnDeleteClone)
     }
@@ -40,20 +43,37 @@ class ClonedAppsAdapter(
 
     override fun onBindViewHolder(holder: CloneViewHolder, position: Int) {
         val item = items[position]
+        val context = holder.itemView.context
+
         holder.tvName.text = item.cloneName
         holder.tvPackage.text = item.clonePackageName
         holder.tvBadge.text = item.badgeLabel
 
+        val isCloneInstalled = packageManager.getLaunchIntentForPackage(item.clonePackageName) != null
+        if (isCloneInstalled) {
+            holder.tvInstallStatus.text = "Installed"
+            holder.tvInstallStatus.setTextColor(ContextCompat.getColor(context, R.color.colorEmerald))
+            holder.btnOpen.text = "Open Clone"
+        } else {
+            holder.tvInstallStatus.text = "Install APK"
+            holder.tvInstallStatus.setTextColor(ContextCompat.getColor(context, R.color.colorAccentCyan))
+            holder.btnOpen.text = "Install & Open"
+        }
+
         try {
-            val drawable = packageManager.getApplicationIcon(item.originalPackageName).mutate()
-            val matrix = ColorMatrix().apply { setSaturation(1.25f) }
-            drawable.colorFilter = ColorMatrixColorFilter(matrix)
-            holder.ivIcon.setImageDrawable(drawable)
+            val iconDrawable = if (isCloneInstalled) {
+                packageManager.getApplicationIcon(item.clonePackageName)
+            } else {
+                packageManager.getApplicationIcon(item.originalPackageName)
+            }
+            val customBitmap = IconCustomizer.createClonedIconBitmap(iconDrawable, item.badgeLabel)
+            holder.ivIcon.setImageBitmap(customBitmap)
         } catch (_: Exception) {
             holder.ivIcon.setImageResource(R.drawable.ic_cloner_logo)
         }
 
         holder.btnOpen.setOnClickListener { onOpenClick(item) }
+        holder.btnPinIcon.setOnClickListener { onPinIconClick(item) }
         holder.btnRename.setOnClickListener { onRenameClick(item) }
         holder.btnDelete.setOnClickListener { onDeleteClick(item) }
     }

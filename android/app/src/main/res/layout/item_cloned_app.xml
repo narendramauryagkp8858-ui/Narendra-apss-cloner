@@ -14,15 +14,15 @@
         android:orientation="horizontal">
 
         <FrameLayout
-            android:layout_width="50dp"
-            android:layout_height="50dp">
+            android:layout_width="54dp"
+            android:layout_height="54dp">
 
             <ImageView
                 android:id="@+id/ivCloneIcon"
-                android:layout_width="46dp"
-                android:layout_height="46dp"
+                android:layout_width="50dp"
+                android:layout_height="50dp"
                 android:layout_gravity="center"
-                android:contentDescription="Clone Icon" />
+                android:contentDescription="Cloned App Icon" />
 
             <TextView
                 android:id="@+id/tvCloneBadge"
@@ -37,7 +37,8 @@
                 android:text="2"
                 android:textColor="@color/white"
                 android:textSize="9sp"
-                android:textStyle="bold" />
+                android:textStyle="bold"
+                android:visibility="gone" />
         </FrameLayout>
 
         <LinearLayout
@@ -47,21 +48,44 @@
             android:layout_weight="1"
             android:orientation="vertical">
 
-            <TextView
-                android:id="@+id/tvCloneName"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:ellipsize="end"
-                android:maxLines="1"
-                android:textColor="@color/white"
-                android:textSize="15sp"
-                android:textStyle="bold" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvCloneName"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="@color/white"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tvInstallStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_badge_pill"
+                    android:paddingStart="8dp"
+                    android:paddingTop="2dp"
+                    android:paddingEnd="8dp"
+                    android:paddingBottom="2dp"
+                    android:text="Installed"
+                    android:textColor="@color/colorEmerald"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/tvClonePackage"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="2dp"
+                android:layout_marginTop="3dp"
                 android:ellipsize="end"
                 android:maxLines="1"
                 android:textColor="@color/colorTextSecondary"
@@ -89,26 +113,37 @@
             android:textStyle="bold" />
 
         <Button
+            android:id="@+id/btnPinIcon"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_marginStart="6dp"
+            android:backgroundTint="#1E293B"
+            android:text="Pin Icon"
+            android:textAllCaps="false"
+            android:textColor="#C4B5FD"
+            android:textSize="11sp" />
+
+        <Button
             android:id="@+id/btnRenameClone"
             android:layout_width="wrap_content"
             android:layout_height="38dp"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:backgroundTint="#1E293B"
             android:text="Rename"
             android:textAllCaps="false"
             android:textColor="@color/colorAccentCyan"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
 
         <Button
             android:id="@+id/btnDeleteClone"
             android:layout_width="wrap_content"
             android:layout_height="38dp"
-            android:layout_marginStart="8dp"
+            android:layout_marginStart="6dp"
             android:backgroundTint="#2A1215"
             android:text="Delete"
             android:textAllCaps="false"
             android:textColor="@color/colorDangerRed"
-            android:textSize="12sp" />
+            android:textSize="11sp" />
     </LinearLayout>
 
 </LinearLayout>
