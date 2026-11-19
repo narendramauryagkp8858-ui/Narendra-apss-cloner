@@ -11,6 +11,7 @@ import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.narendra.appscloner.R
 import com.narendra.appscloner.core.IconCustomizer
+import com.narendra.appscloner.core.ShizukuInstallerHelper
 import com.narendra.appscloner.model.ClonedAppInfo
 import com.narendra.appscloner.model.InstalledAppInfo
 
@@ -20,7 +21,8 @@ class ClonedAppsAdapter(
     private val onOpenClick: (ClonedAppInfo) -> Unit,
     private val onPinIconClick: (ClonedAppInfo) -> Unit,
     private val onRenameClick: (ClonedAppInfo) -> Unit,
-    private val onDeleteClick: (ClonedAppInfo) -> Unit
+    private val onDeleteClick: (ClonedAppInfo) -> Unit,
+    private val onFixPlayStoreClick: (ClonedAppInfo) -> Unit
 ) : RecyclerView.Adapter<ClonedAppsAdapter.CloneViewHolder>() {
 
     class CloneViewHolder(view: View) : RecyclerView.ViewHolder(view) {
@@ -33,6 +35,7 @@ class ClonedAppsAdapter(
         val btnPinIcon: Button = view.findViewById(R.id.btnPinIcon)
         val btnRename: Button = view.findViewById(R.id.btnRenameClone)
         val btnDelete: Button = view.findViewById(R.id.btnDeleteClone)
+        val btnFixPlayStore: Button = view.findViewById(R.id.btnFixPlayStore)
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): CloneViewHolder {
@@ -51,12 +54,24 @@ class ClonedAppsAdapter(
 
         val isCloneInstalled = packageManager.getLaunchIntentForPackage(item.clonePackageName) != null
         if (isCloneInstalled) {
-            holder.tvInstallStatus.text = "Installed"
-            holder.tvInstallStatus.setTextColor(ContextCompat.getColor(context, R.color.colorEmerald))
+            val fromPlayStore = ShizukuInstallerHelper.isInstalledFromPlayStoreSource(
+                context,
+                item.clonePackageName
+            )
+            if (fromPlayStore) {
+                holder.tvInstallStatus.text = "Play Store Source"
+                holder.tvInstallStatus.setTextColor(ContextCompat.getColor(context, R.color.colorEmerald))
+                holder.btnFixPlayStore.visibility = View.GONE
+            } else {
+                holder.tvInstallStatus.text = "Sideloaded"
+                holder.tvInstallStatus.setTextColor(ContextCompat.getColor(context, R.color.colorAmber))
+                holder.btnFixPlayStore.visibility = View.VISIBLE
+            }
             holder.btnOpen.text = "Open Clone"
         } else {
             holder.tvInstallStatus.text = "Install APK"
             holder.tvInstallStatus.setTextColor(ContextCompat.getColor(context, R.color.colorAccentCyan))
+            holder.btnFixPlayStore.visibility = View.GONE
             holder.btnOpen.text = "Install & Open"
         }
 
@@ -76,6 +91,7 @@ class ClonedAppsAdapter(
         holder.btnPinIcon.setOnClickListener { onPinIconClick(item) }
         holder.btnRename.setOnClickListener { onRenameClick(item) }
         holder.btnDelete.setOnClickListener { onDeleteClick(item) }
+        holder.btnFixPlayStore.setOnClickListener { onFixPlayStoreClick(item) }
     }
 
     override fun getItemCount(): Int = items.size

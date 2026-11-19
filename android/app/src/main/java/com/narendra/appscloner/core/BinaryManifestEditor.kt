@@ -27,7 +27,8 @@ object BinaryManifestEditor {
         oldPackage: String,
         newPackage: String,
         customLabel: String,
-        cloneNumber: Int
+        cloneNumber: Int,
+        hasSplits: Boolean = false
     ): ByteArray {
         val buf = ByteBuffer.wrap(axmlBytes).order(ByteOrder.LITTLE_ENDIAN)
 
@@ -183,6 +184,21 @@ object BinaryManifestEditor {
                                 bodyBuf.putInt(attrOff + 8, newIdx)
                                 bodyBuf.put(attrOff + 15, TYPE_STRING.toByte())
                                 bodyBuf.putInt(attrOff + 16, newIdx)
+                            }
+                        }
+
+                        "meta-data" -> {
+                            if (attrName == "name" && strVal != null) {
+                                val shouldNeutralize = strVal == "com.android.stamp.source" ||
+                                    strVal == "com.android.stamp.type" ||
+                                    strVal == "com.android.vending.derived.apk.id" ||
+                                    (!hasSplits && strVal == "com.android.vending.splits.required")
+                                if (shouldNeutralize) {
+                                    val newIdx = internNewString("com.narendra.cloner.disabled.$strVal")
+                                    bodyBuf.putInt(attrOff + 8, newIdx)
+                                    bodyBuf.put(attrOff + 15, TYPE_STRING.toByte())
+                                    bodyBuf.putInt(attrOff + 16, newIdx)
+                                }
                             }
                         }
                     }

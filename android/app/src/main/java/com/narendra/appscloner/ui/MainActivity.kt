@@ -2,6 +2,8 @@ package com.narendra.appscloner.ui
 
 import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -16,6 +18,7 @@ import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.Button
 import android.widget.EditText
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -23,6 +26,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.narendra.appscloner.R
@@ -30,8 +34,11 @@ import com.narendra.appscloner.core.ApkClonerEngine
 import com.narendra.appscloner.core.CloneStorageManager
 import com.narendra.appscloner.core.ClonerDeviceAdminReceiver
 import com.narendra.appscloner.core.IconCustomizer
+import com.narendra.appscloner.core.ShizukuInstallerHelper
 import com.narendra.appscloner.model.ClonedAppInfo
 import com.narendra.appscloner.model.InstalledAppInfo
+import rikka.shizuku.Shizuku
+import java.io.File
 import java.util.concurrent.Executors
 
 /**
@@ -40,9 +47,15 @@ import java.util.concurrent.Executors
  */
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        private const val REQ_SHIZUKU_PERMISSION = 4001
+    }
+
     private lateinit var tvCloneCount: TextView
     private lateinit var tvInstalledCount: TextView
     private lateinit var tvNoClones: TextView
+    private lateinit var tvPlayStoreModeStatus: TextView
+    private lateinit var btnPlayStoreModeAction: Button
     private lateinit var etSearch: EditText
     private lateinit var rvClonedApps: RecyclerView
     private lateinit var rvInstalledApps: RecyclerView
@@ -55,6 +68,37 @@ class MainActivity : AppCompatActivity() {
 
     private val executor = Executors.newSingleThreadExecutor()
     private var pendingCloneForShortcut: ClonedAppInfo? = null
+    private var pendingFixCloneAfterPermission: ClonedAppInfo? = null
+
+    private val shizukuPermissionListener = Shizuku.OnRequestPermissionResultListener { requestCode, grantResult ->
+        if (requestCode == REQ_SHIZUKU_PERMISSION) {
+            runOnUiThread {
+                updatePlayStoreModeUi()
+                if (grantResult == PackageManager.PERMISSION_GRANTED) {
+                    Toast.makeText(
+                        this,
+                        "Play Store Source Mode Enabled (com.android.vending)!",
+                        Toast.LENGTH_LONG
+                    ).show()
+                    pendingFixCloneAfterPermission?.let { clone ->
+                        pendingFixCloneAfterPermission = null
+                        buildAndInstallClone(clone)
+                    }
+                } else {
+                    pendingFixCloneAfterPermission = null
+                    Toast.makeText(this, "Shizuku permission denied.", Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    private val shizukuBinderReceivedListener = Shizuku.OnBinderReceivedListener {
+        runOnUiThread { updatePlayStoreModeUi() }
+    }
+
+    private val shizukuBinderDeadListener = Shizuku.OnBinderDeadListener {
+        runOnUiThread { updatePlayStoreModeUi() }
+    }
 
     private val installResultReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -76,21 +120,7 @@ class MainActivity : AppCompatActivity() {
                 }
 
                 PackageInstaller.STATUS_SUCCESS -> {
-                    refreshClones()
-                    loadDeviceApps()
-                    Toast.makeText(
-                        this@MainActivity,
-                        "Cloned App Installed! New icon added.",
-                        Toast.LENGTH_LONG
-                    ).show()
-                    pendingCloneForShortcut?.let { clone ->
-                        try {
-                            val icon = packageManager.getApplicationIcon(clone.clonePackageName)
-                            IconCustomizer.pinHomeScreenIcon(this@MainActivity, clone, icon)
-                        } catch (_: Exception) {
-                        }
-                        pendingCloneForShortcut = null
-                    }
+                    onCloneInstalledSuccess(usedPlayStoreSource = false)
                 }
 
                 else -> {
@@ -110,6 +140,8 @@ class MainActivity : AppCompatActivity() {
         tvCloneCount = findViewById(R.id.tvCloneCount)
         tvInstalledCount = findViewById(R.id.tvInstalledCount)
         tvNoClones = findViewById(R.id.tvNoClones)
+        tvPlayStoreModeStatus = findViewById(R.id.tvPlayStoreModeStatus)
+        btnPlayStoreModeAction = findViewById(R.id.btnPlayStoreModeAction)
         etSearch = findViewById(R.id.etSearch)
         rvClonedApps = findViewById(R.id.rvClonedApps)
         rvInstalledApps = findViewById(R.id.rvInstalledApps)
@@ -124,6 +156,14 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
+        btnPlayStoreModeAction.setOnClickListener {
+            handlePlayStoreModeButtonClick()
+        }
+
+        Shizuku.addRequestPermissionResultListener(shizukuPermissionListener)
+        Shizuku.addBinderReceivedListenerSticky(shizukuBinderReceivedListener)
+        Shizuku.addBinderDeadListener(shizukuBinderDeadListener)
+
         ContextCompat.registerReceiver(
             this,
             installResultReceiver,
@@ -132,6 +172,7 @@ class MainActivity : AppCompatActivity() {
         )
 
         setupRecyclerViews()
+        updatePlayStoreModeUi()
         loadDeviceApps()
         refreshClones()
 
@@ -146,6 +187,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        updatePlayStoreModeUi()
         refreshClones()
     }
 
@@ -154,8 +196,186 @@ class MainActivity : AppCompatActivity() {
             unregisterReceiver(installResultReceiver)
         } catch (_: Exception) {
         }
+        try {
+            Shizuku.removeRequestPermissionResultListener(shizukuPermissionListener)
+            Shizuku.removeBinderReceivedListener(shizukuBinderReceivedListener)
+            Shizuku.removeBinderDeadListener(shizukuBinderDeadListener)
+        } catch (_: Exception) {
+        }
         executor.shutdownNow()
         super.onDestroy()
+    }
+
+    private fun updatePlayStoreModeUi() {
+        when {
+            ShizukuInstallerHelper.isReadyForPlayStoreInstall() -> {
+                tvPlayStoreModeStatus.text = "Active (com.android.vending) — Play Store verified"
+                tvPlayStoreModeStatus.setTextColor(ContextCompat.getColor(this, R.color.colorEmerald))
+                btnPlayStoreModeAction.text = "Active"
+            }
+
+            ShizukuInstallerHelper.isShizukuRunning() -> {
+                tvPlayStoreModeStatus.text = "Shizuku ready — Tap Allow for Play Store install"
+                tvPlayStoreModeStatus.setTextColor(ContextCompat.getColor(this, R.color.colorAmber))
+                btnPlayStoreModeAction.text = "Allow"
+            }
+
+            else -> {
+                tvPlayStoreModeStatus.text = "Fix 'App Not Installed from Play Store'"
+                tvPlayStoreModeStatus.setTextColor(ContextCompat.getColor(this, R.color.colorAmber))
+                btnPlayStoreModeAction.text = "Fix Now"
+            }
+        }
+    }
+
+    private fun handlePlayStoreModeButtonClick(targetClone: ClonedAppInfo? = null) {
+        if (ShizukuInstallerHelper.isReadyForPlayStoreInstall()) {
+            if (targetClone != null) {
+                buildAndInstallClone(targetClone)
+            } else {
+                AlertDialog.Builder(this)
+                    .setTitle("Play Store Mode Active")
+                    .setMessage(
+                        "All cloned apps are automatically installed with Google Play Store (com.android.vending) as their installer source.\n\n" +
+                            "If any Banking/WhatsApp/Game uses PairIP Signature Check, use Official Work Profile."
+                    )
+                    .setPositiveButton("OK", null)
+                    .setNeutralButton("Work Profile") { _, _ -> launchWorkProfileSetup() }
+                    .show()
+            }
+            return
+        }
+
+        if (ShizukuInstallerHelper.isShizukuRunning()) {
+            pendingFixCloneAfterPermission = targetClone
+            Shizuku.requestPermission(REQ_SHIZUKU_PERMISSION)
+            return
+        }
+
+        showPlayStoreFixGuideDialog(targetClone)
+    }
+
+    private fun showPlayStoreFixGuideDialog(targetClone: ClonedAppInfo?) {
+        val shizukuInstalled = ShizukuInstallerHelper.isShizukuInstalled(this)
+        val message = buildString {
+            append("Apps show 'App Not Installed from Play Store' when Android records a non-Play-Store installer.\n\n")
+            append("Choose any fix below:\n\n")
+            append("1. Play Store Source via Shizuku (No Root):\n")
+            append("   • Open Shizuku -> Start via Wireless Debugging\n")
+            append("   • Return here & tap 'Allow'\n")
+            append("   • Clones install with com.android.vending!\n\n")
+            append("2. Official Work Profile:\n")
+            append("   • Best for WhatsApp, Banking & PairIP games.\n\n")
+            if (targetClone != null) {
+                append("3. Export APK / ADB Command:\n")
+                append("   adb install -i com.android.vending base_cloned.apk")
+            }
+        }
+
+        val builder = AlertDialog.Builder(this)
+            .setTitle("Fix 'App Not Installed from Play Store'")
+            .setMessage(message)
+            .setPositiveButton(if (shizukuInstalled) "Open Shizuku" else "Install Shizuku") { _, _ ->
+                openShizukuOrPlayStore(shizukuInstalled)
+            }
+            .setNeutralButton("Work Profile") { _, _ ->
+                launchWorkProfileSetup()
+            }
+
+        if (targetClone != null) {
+            builder.setNegativeButton("Export APK") { _, _ ->
+                exportClonedApk(targetClone)
+            }
+        } else {
+            builder.setNegativeButton("Close", null)
+        }
+
+        builder.show()
+    }
+
+    private fun openShizukuOrPlayStore(shizukuInstalled: Boolean) {
+        if (shizukuInstalled) {
+            val launch = packageManager.getLaunchIntentForPackage(ShizukuInstallerHelper.SHIZUKU_PACKAGE)
+            if (launch != null) {
+                startActivity(launch)
+                return
+            }
+        }
+        try {
+            startActivity(
+                Intent(
+                    Intent.ACTION_VIEW,
+                    Uri.parse("market://details?id=${ShizukuInstallerHelper.SHIZUKU_PACKAGE}")
+                )
+            )
+        } catch (_: Exception) {
+            try {
+                startActivity(
+                    Intent(
+                        Intent.ACTION_VIEW,
+                        Uri.parse("https://play.google.com/store/apps/details?id=${ShizukuInstallerHelper.SHIZUKU_PACKAGE}")
+                    )
+                )
+            } catch (_: Exception) {
+                Toast.makeText(this, "Install 'Shizuku' from Google Play Store.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun exportClonedApk(clone: ClonedAppInfo) {
+        val progressBar = ProgressBar(this).apply { isIndeterminate = true }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Preparing Cloned APK...")
+            .setView(progressBar)
+            .setCancelable(false)
+            .create()
+        dialog.show()
+
+        executor.execute {
+            try {
+                val result = ApkClonerEngine.buildClonedApks(
+                    context = this,
+                    oldPackage = clone.originalPackageName,
+                    newPackage = clone.clonePackageName,
+                    customLabel = clone.cloneName,
+                    cloneNumber = clone.cloneNumber,
+                    badgeLabel = clone.badgeLabel
+                )
+                val baseApk = result.outputApkFiles.first()
+                runOnUiThread {
+                    dialog.dismiss()
+                    copyAdbCommandToClipboard(baseApk)
+                    shareApkFile(baseApk, clone.cloneName)
+                }
+            } catch (e: Exception) {
+                runOnUiThread {
+                    dialog.dismiss()
+                    Toast.makeText(this, "Export failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    private fun copyAdbCommandToClipboard(apkFile: File) {
+        val cmd = "adb install -i com.android.vending \"${apkFile.name}\""
+        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+        cm?.setPrimaryClip(ClipData.newPlainText("ADB Play Store Install", cmd))
+        Toast.makeText(this, "Copied ADB command: $cmd", Toast.LENGTH_LONG).show()
+    }
+
+    private fun shareApkFile(apkFile: File, cloneName: String) {
+        try {
+            val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", apkFile)
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/vnd.android.package-archive"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                putExtra(Intent.EXTRA_SUBJECT, "$cloneName Cloned APK")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            startActivity(Intent.createChooser(shareIntent, "Share Cloned APK"))
+        } catch (e: Exception) {
+            Toast.makeText(this, "APK saved at: ${apkFile.absolutePath}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun setupRecyclerViews() {
@@ -166,7 +386,8 @@ class MainActivity : AppCompatActivity() {
             onOpenClick = { clone -> openClone(clone) },
             onPinIconClick = { clone -> pinCloneIcon(clone) },
             onRenameClick = { clone -> showRenameDialog(clone) },
-            onDeleteClick = { clone -> confirmDeleteClone(clone) }
+            onDeleteClick = { clone -> confirmDeleteClone(clone) },
+            onFixPlayStoreClick = { clone -> handlePlayStoreModeButtonClick(clone) }
         )
         rvClonedApps.adapter = clonedAdapter
 
@@ -236,7 +457,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showCreateCloneDialog(app: InstalledAppInfo) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && !packageManager.canRequestPackageInstalls()) {
+        if (!ShizukuInstallerHelper.isReadyForPlayStoreInstall() &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            !packageManager.canRequestPackageInstalls()
+        ) {
             AlertDialog.Builder(this)
                 .setTitle("Allow App Installation")
                 .setMessage("To install cloned apps with a new separate icon, enable 'Install unknown apps' for Narendra Apps Cloner.")
@@ -279,10 +503,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildAndInstallClone(cloneInfo: ClonedAppInfo) {
+        val usePlayStoreMode = ShizukuInstallerHelper.isReadyForPlayStoreInstall()
         val progressBar = ProgressBar(this).apply { isIndeterminate = true }
         val progressDialog = AlertDialog.Builder(this)
             .setTitle("Cloning ${cloneInfo.originalAppName}...")
-            .setMessage("Generating separate package (${cloneInfo.clonePackageName}) & creating new badged icon...")
+            .setMessage(
+                if (usePlayStoreMode) {
+                    "Building ${cloneInfo.clonePackageName} & installing with Play Store source (com.android.vending)..."
+                } else {
+                    "Generating separate package (${cloneInfo.clonePackageName}) & creating new badged icon..."
+                }
+            )
             .setView(progressBar)
             .setCancelable(false)
             .create()
@@ -301,6 +532,20 @@ class MainActivity : AppCompatActivity() {
                 CloneStorageManager.saveNewClone(this, cloneInfo)
                 pendingCloneForShortcut = cloneInfo
 
+                if (usePlayStoreMode) {
+                    val installResult = ShizukuInstallerHelper.installWithPlayStoreSource(
+                        this,
+                        result.outputApkFiles
+                    )
+                    if (installResult.isSuccess) {
+                        runOnUiThread {
+                            progressDialog.dismiss()
+                            onCloneInstalledSuccess(usedPlayStoreSource = true)
+                        }
+                        return@execute
+                    }
+                }
+
                 runOnUiThread {
                     progressDialog.dismiss()
                     refreshClones()
@@ -317,6 +562,26 @@ class MainActivity : AppCompatActivity() {
                         .show()
                 }
             }
+        }
+    }
+
+    private fun onCloneInstalledSuccess(usedPlayStoreSource: Boolean) {
+        refreshClones()
+        loadDeviceApps()
+        val msg = if (usedPlayStoreSource) {
+            "Cloned App Installed with Play Store Source (com.android.vending)!"
+        } else {
+            "Cloned App Installed! New icon added."
+        }
+        Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
+
+        pendingCloneForShortcut?.let { clone ->
+            try {
+                val icon = packageManager.getApplicationIcon(clone.clonePackageName)
+                IconCustomizer.pinHomeScreenIcon(this, clone, icon)
+            } catch (_: Exception) {
+            }
+            pendingCloneForShortcut = null
         }
     }
 

@@ -76,6 +76,8 @@ object ApkClonerEngine {
         val signerConfig = SigningKeyManager.getSignerConfig(context)
         val signedApks = mutableListOf<File>()
 
+        val hasSplits = sourcePaths.size > 1
+
         sourcePaths.forEachIndexed { index, srcPath ->
             val srcFile = File(srcPath)
             val unsignedFile = File(workDir, "unsigned_$index.apk")
@@ -91,6 +93,7 @@ object ApkClonerEngine {
                 newPackage = newPackage,
                 customLabel = customLabel,
                 cloneNumber = cloneNumber,
+                hasSplits = hasSplits,
                 replacementIconPng = if (index == 0) badgedPngBytes else null
             )
 
@@ -121,6 +124,7 @@ object ApkClonerEngine {
         newPackage: String,
         customLabel: String,
         cloneNumber: Int,
+        hasSplits: Boolean,
         replacementIconPng: ByteArray?
     ) {
         ZipFile(sourceApk).use { zipIn ->
@@ -152,7 +156,8 @@ object ApkClonerEngine {
                                 oldPackage = oldPackage,
                                 newPackage = newPackage,
                                 customLabel = customLabel,
-                                cloneNumber = cloneNumber
+                                cloneNumber = cloneNumber,
+                                hasSplits = hasSplits
                             )
                         }
 
