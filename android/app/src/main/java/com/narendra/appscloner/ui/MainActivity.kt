@@ -1,9 +1,8 @@
 package com.narendra.appscloner.ui
 
+import android.Manifest
 import android.app.admin.DevicePolicyManager
 import android.content.BroadcastReceiver
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -25,30 +24,33 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
-import androidx.core.content.FileProvider
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.narendra.appscloner.R
+import com.narendra.appscloner.core.AdbPairingReceiver
 import com.narendra.appscloner.core.ApkClonerEngine
+import com.narendra.appscloner.core.BuiltInAdbEngine
 import com.narendra.appscloner.core.CloneStorageManager
 import com.narendra.appscloner.core.ClonerDeviceAdminReceiver
 import com.narendra.appscloner.core.IconCustomizer
+import com.narendra.appscloner.core.LocalAdbDiscovery
 import com.narendra.appscloner.core.ShizukuInstallerHelper
 import com.narendra.appscloner.model.ClonedAppInfo
 import com.narendra.appscloner.model.InstalledAppInfo
 import rikka.shizuku.Shizuku
-import java.io.File
 import java.util.concurrent.Executors
 
 /**
- * Narendra Apps Cloner - Main App Cloner Dashboard
+ * Narendra Apps Cloner - Main App Cloner Dashboard with In-Built Zero-Root Shizuku/ADB Engine
  * Developer: Narendra Maurya (narendramauryagkp@gmail.com)
  */
 class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQ_SHIZUKU_PERMISSION = 4001
+        private const val REQ_NOTIFICATION_PERMISSION = 4002
     }
 
     private lateinit var tvCloneCount: TextView
@@ -176,6 +178,16 @@ class MainActivity : AppCompatActivity() {
         loadDeviceApps()
         refreshClones()
 
+        // Silently try auto-connecting if user already paired Wireless Debugging earlier
+        if (BuiltInAdbEngine.isPaired(this) && !BuiltInAdbEngine.isConnected(this)) {
+            executor.execute {
+                val connected = BuiltInAdbEngine.ensureConnected(this)
+                if (connected) {
+                    runOnUiThread { updatePlayStoreModeUi() }
+                }
+            }
+        }
+
         etSearch.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
@@ -192,6 +204,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
+        LocalAdbDiscovery.stopDiscovery()
         try {
             unregisterReceiver(installResultReceiver)
         } catch (_: Exception) {
@@ -206,42 +219,83 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
     }
 
+    private fun isPlayStoreSourceEngineReady(): Boolean {
+        return BuiltInAdbEngine.isConnected(this) ||
+            BuiltInAdbEngine.isPaired(this) ||
+            ShizukuInstallerHelper.isReadyForPlayStoreInstall()
+    }
+
     private fun updatePlayStoreModeUi() {
         when {
-            ShizukuInstallerHelper.isReadyForPlayStoreInstall() -> {
-                tvPlayStoreModeStatus.text = "Active (com.android.vending) — Play Store verified"
+            BuiltInAdbEngine.isConnected(this) -> {
+                tvPlayStoreModeStatus.text = "Connected (com.android.vending) — In-Built No-Root Active"
                 tvPlayStoreModeStatus.setTextColor(ContextCompat.getColor(this, R.color.colorEmerald))
                 btnPlayStoreModeAction.text = "Active"
             }
 
-            ShizukuInstallerHelper.isShizukuRunning() -> {
-                tvPlayStoreModeStatus.text = "Shizuku ready — Tap Allow for Play Store install"
-                tvPlayStoreModeStatus.setTextColor(ContextCompat.getColor(this, R.color.colorAmber))
-                btnPlayStoreModeAction.text = "Allow"
+            BuiltInAdbEngine.isPaired(this) -> {
+                tvPlayStoreModeStatus.text = "Paired — Turn on Wireless Debugging to auto-connect"
+                tvPlayStoreModeStatus.setTextColor(ContextCompat.getColor(this, R.color.colorAccentCyan))
+                btnPlayStoreModeAction.text = "Connect"
+            }
+
+            ShizukuInstallerHelper.isReadyForPlayStoreInstall() -> {
+                tvPlayStoreModeStatus.text = "Active via Shizuku (com.android.vending)"
+                tvPlayStoreModeStatus.setTextColor(ContextCompat.getColor(this, R.color.colorEmerald))
+                btnPlayStoreModeAction.text = "Active"
             }
 
             else -> {
-                tvPlayStoreModeStatus.text = "Fix 'App Not Installed from Play Store'"
+                tvPlayStoreModeStatus.text = "Pair once (No Root) to fix 'App Not Installed from Play Store'"
                 tvPlayStoreModeStatus.setTextColor(ContextCompat.getColor(this, R.color.colorAmber))
-                btnPlayStoreModeAction.text = "Fix Now"
+                btnPlayStoreModeAction.text = "Enable"
             }
         }
     }
 
     private fun handlePlayStoreModeButtonClick(targetClone: ClonedAppInfo? = null) {
-        if (ShizukuInstallerHelper.isReadyForPlayStoreInstall()) {
+        if (BuiltInAdbEngine.isConnected(this) || ShizukuInstallerHelper.isReadyForPlayStoreInstall()) {
             if (targetClone != null) {
                 buildAndInstallClone(targetClone)
             } else {
                 AlertDialog.Builder(this)
-                    .setTitle("Play Store Mode Active")
+                    .setTitle("In-Built Shizuku Engine Active")
                     .setMessage(
-                        "All cloned apps are automatically installed with Google Play Store (com.android.vending) as their installer source.\n\n" +
-                            "If any Banking/WhatsApp/Game uses PairIP Signature Check, use Official Work Profile."
+                        "Zero-root Play Store Mode is connected! Cloned apps install directly with Google Play Store (com.android.vending) as their installer.\n\n" +
+                            "For apps with strict PairIP / Banking signature checks, you can also use Official Work Profile."
                     )
                     .setPositiveButton("OK", null)
-                    .setNeutralButton("Work Profile") { _, _ -> launchWorkProfileSetup() }
+                    .setNeutralButton("Re-Pair") { _, _ -> showInBuiltPairingGuideDialog(null) }
+                    .setNegativeButton("Work Profile") { _, _ -> launchWorkProfileSetup() }
                     .show()
+            }
+            return
+        }
+
+        if (BuiltInAdbEngine.isPaired(this)) {
+            val progress = ProgressBar(this).apply { isIndeterminate = true }
+            val dialog = AlertDialog.Builder(this)
+                .setTitle("Connecting In-Built Engine...")
+                .setMessage("Ensure Wireless Debugging is ON in Developer Options...")
+                .setView(progress)
+                .setCancelable(false)
+                .create()
+            dialog.show()
+
+            executor.execute {
+                val ok = BuiltInAdbEngine.ensureConnected(this)
+                runOnUiThread {
+                    dialog.dismiss()
+                    updatePlayStoreModeUi()
+                    if (ok) {
+                        Toast.makeText(this, "In-Built Shizuku Engine Connected!", Toast.LENGTH_SHORT).show()
+                        if (targetClone != null) {
+                            buildAndInstallClone(targetClone)
+                        }
+                    } else {
+                        showInBuiltPairingGuideDialog(targetClone)
+                    }
+                }
             }
             return
         }
@@ -252,130 +306,155 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        showPlayStoreFixGuideDialog(targetClone)
+        showInBuiltPairingGuideDialog(targetClone)
     }
 
-    private fun showPlayStoreFixGuideDialog(targetClone: ClonedAppInfo?) {
-        val shizukuInstalled = ShizukuInstallerHelper.isShizukuInstalled(this)
+    private fun showInBuiltPairingGuideDialog(targetClone: ClonedAppInfo?) {
         val message = buildString {
-            append("Apps show 'App Not Installed from Play Store' when Android records a non-Play-Store installer.\n\n")
-            append("Choose any fix below:\n\n")
-            append("1. Play Store Source via Shizuku (No Root):\n")
-            append("   • Open Shizuku -> Start via Wireless Debugging\n")
-            append("   • Return here & tap 'Allow'\n")
-            append("   • Clones install with com.android.vending!\n\n")
-            append("2. Official Work Profile:\n")
-            append("   • Best for WhatsApp, Banking & PairIP games.\n\n")
-            if (targetClone != null) {
-                append("3. Export APK / ADB Command:\n")
-                append("   adb install -i com.android.vending base_cloned.apk")
-            }
+            append("Narendra Apps Cloner has an In-Built Wireless Debugging engine (no external Shizuku app & no root needed!):\n\n")
+            append("How to enable in 30 seconds:\n")
+            append("1. Tap 'Auto Pair (Settings)' below.\n")
+            append("2. Enable 'Wireless Debugging' -> tap 'Pair device with pairing code'.\n")
+            append("3. Pull down your notification bar & type the 6-digit code in 'Enter Pairing Code'.\n\n")
+            append("Once paired, cloned apps install with Play Store source (com.android.vending)!")
         }
 
         val builder = AlertDialog.Builder(this)
-            .setTitle("Fix 'App Not Installed from Play Store'")
+            .setTitle("Enable In-Built Shizuku (No Root)")
             .setMessage(message)
-            .setPositiveButton(if (shizukuInstalled) "Open Shizuku" else "Install Shizuku") { _, _ ->
-                openShizukuOrPlayStore(shizukuInstalled)
+            .setPositiveButton("Auto Pair (Settings)") { _, _ ->
+                startAutoPairingFlow()
             }
-            .setNeutralButton("Work Profile") { _, _ ->
+            .setNeutralButton("Manual Code") { _, _ ->
+                showManualPairingDialog(targetClone)
+            }
+            .setNegativeButton("Work Profile") { _, _ ->
                 launchWorkProfileSetup()
             }
-
-        if (targetClone != null) {
-            builder.setNegativeButton("Export APK") { _, _ ->
-                exportClonedApk(targetClone)
-            }
-        } else {
-            builder.setNegativeButton("Close", null)
-        }
 
         builder.show()
     }
 
-    private fun openShizukuOrPlayStore(shizukuInstalled: Boolean) {
-        if (shizukuInstalled) {
-            val launch = packageManager.getLaunchIntentForPackage(ShizukuInstallerHelper.SHIZUKU_PACKAGE)
-            if (launch != null) {
-                startActivity(launch)
-                return
-            }
-        }
-        try {
-            startActivity(
-                Intent(
-                    Intent.ACTION_VIEW,
-                    Uri.parse("market://details?id=${ShizukuInstallerHelper.SHIZUKU_PACKAGE}")
-                )
+    private fun startAutoPairingFlow() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.POST_NOTIFICATIONS),
+                REQ_NOTIFICATION_PERMISSION
             )
+            Toast.makeText(
+                this,
+                "Allow notifications so you can enter the 6-digit pairing code directly!",
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+
+        LocalAdbDiscovery.startPairingDiscovery(this)
+        AdbPairingReceiver.showPairingNotification(this)
+        openDeveloperOptions()
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == REQ_NOTIFICATION_PERMISSION &&
+            grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
+        ) {
+            LocalAdbDiscovery.startPairingDiscovery(this)
+            AdbPairingReceiver.showPairingNotification(this)
+            openDeveloperOptions()
+        }
+    }
+
+    private fun openDeveloperOptions() {
+        try {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS))
         } catch (_: Exception) {
             try {
-                startActivity(
-                    Intent(
-                        Intent.ACTION_VIEW,
-                        Uri.parse("https://play.google.com/store/apps/details?id=${ShizukuInstallerHelper.SHIZUKU_PACKAGE}")
-                    )
-                )
+                startActivity(Intent(Settings.ACTION_SETTINGS))
             } catch (_: Exception) {
-                Toast.makeText(this, "Install 'Shizuku' from Google Play Store.", Toast.LENGTH_LONG).show()
+                Toast.makeText(this, "Open Settings -> Developer Options -> Wireless Debugging", Toast.LENGTH_LONG).show()
             }
         }
     }
 
-    private fun exportClonedApk(clone: ClonedAppInfo) {
-        val progressBar = ProgressBar(this).apply { isIndeterminate = true }
-        val dialog = AlertDialog.Builder(this)
-            .setTitle("Preparing Cloned APK...")
-            .setView(progressBar)
-            .setCancelable(false)
-            .create()
-        dialog.show()
+    private fun showManualPairingDialog(targetClone: ClonedAppInfo?) {
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_builtin_adb_pair, null)
+        val tvDiscovery = view.findViewById<TextView>(R.id.tvPairingDiscoveryStatus)
+        val etHost = view.findViewById<EditText>(R.id.etPairHost)
+        val etPort = view.findViewById<EditText>(R.id.etPairPort)
+        val etCode = view.findViewById<EditText>(R.id.etPairCode)
 
-        executor.execute {
-            try {
-                val result = ApkClonerEngine.buildClonedApks(
-                    context = this,
-                    oldPackage = clone.originalPackageName,
-                    newPackage = clone.clonePackageName,
-                    customLabel = clone.cloneName,
-                    cloneNumber = clone.cloneNumber,
-                    badgeLabel = clone.badgeLabel
-                )
-                val baseApk = result.outputApkFiles.first()
-                runOnUiThread {
-                    dialog.dismiss()
-                    copyAdbCommandToClipboard(baseApk)
-                    shareApkFile(baseApk, clone.cloneName)
+        LocalAdbDiscovery.startPairingDiscovery(this) { host, port ->
+            runOnUiThread {
+                tvDiscovery.text = "Detected pairing service: $host:$port"
+                etHost.setText(host)
+                etPort.setText(port.toString())
+            }
+        }
+
+        LocalAdbDiscovery.latestPairingHost?.let { etHost.setText(it) }
+        if (LocalAdbDiscovery.latestPairingPort > 0) {
+            etPort.setText(LocalAdbDiscovery.latestPairingPort.toString())
+            tvDiscovery.text = "Detected: ${LocalAdbDiscovery.latestPairingHost ?: "127.0.0.1"}:${LocalAdbDiscovery.latestPairingPort}"
+        }
+
+        AlertDialog.Builder(this)
+            .setView(view)
+            .setPositiveButton("Pair & Connect") { _, _ ->
+                val host = etHost.text.toString().trim().ifEmpty { "127.0.0.1" }
+                val port = etPort.text.toString().trim().toIntOrNull() ?: -1
+                val code = etCode.text.toString().trim()
+
+                if (port <= 0 || code.length != 6) {
+                    Toast.makeText(this, "Enter valid pairing port and 6-digit code.", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
                 }
-            } catch (e: Exception) {
-                runOnUiThread {
-                    dialog.dismiss()
-                    Toast.makeText(this, "Export failed: ${e.localizedMessage}", Toast.LENGTH_LONG).show()
+
+                val progress = ProgressBar(this).apply { isIndeterminate = true }
+                val dialog = AlertDialog.Builder(this)
+                    .setTitle("Pairing Wireless Debugging...")
+                    .setView(progress)
+                    .setCancelable(false)
+                    .create()
+                dialog.show()
+
+                executor.execute {
+                    val result = BuiltInAdbEngine.pairAndConnect(this, host, port, code)
+                    runOnUiThread {
+                        dialog.dismiss()
+                        LocalAdbDiscovery.stopDiscovery()
+                        updatePlayStoreModeUi()
+                        if (result.isSuccess) {
+                            Toast.makeText(
+                                this,
+                                "In-Built Shizuku Mode Active (com.android.vending)!",
+                                Toast.LENGTH_LONG
+                            ).show()
+                            if (targetClone != null) {
+                                buildAndInstallClone(targetClone)
+                            }
+                        } else {
+                            Toast.makeText(
+                                this,
+                                "Pairing failed: ${result.exceptionOrNull()?.localizedMessage ?: "Check code"}",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
                 }
             }
-        }
-    }
-
-    private fun copyAdbCommandToClipboard(apkFile: File) {
-        val cmd = "adb install -i com.android.vending \"${apkFile.name}\""
-        val cm = getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-        cm?.setPrimaryClip(ClipData.newPlainText("ADB Play Store Install", cmd))
-        Toast.makeText(this, "Copied ADB command: $cmd", Toast.LENGTH_LONG).show()
-    }
-
-    private fun shareApkFile(apkFile: File, cloneName: String) {
-        try {
-            val uri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", apkFile)
-            val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                type = "application/vnd.android.package-archive"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                putExtra(Intent.EXTRA_SUBJECT, "$cloneName Cloned APK")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            .setNegativeButton("Cancel") { _, _ ->
+                LocalAdbDiscovery.stopDiscovery()
             }
-            startActivity(Intent.createChooser(shareIntent, "Share Cloned APK"))
-        } catch (e: Exception) {
-            Toast.makeText(this, "APK saved at: ${apkFile.absolutePath}", Toast.LENGTH_LONG).show()
-        }
+            .show()
     }
 
     private fun setupRecyclerViews() {
@@ -457,7 +536,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showCreateCloneDialog(app: InstalledAppInfo) {
-        if (!ShizukuInstallerHelper.isReadyForPlayStoreInstall() &&
+        if (!isPlayStoreSourceEngineReady() &&
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
             !packageManager.canRequestPackageInstalls()
         ) {
@@ -503,12 +582,14 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun buildAndInstallClone(cloneInfo: ClonedAppInfo) {
-        val usePlayStoreMode = ShizukuInstallerHelper.isReadyForPlayStoreInstall()
+        val useBuiltInEngine = BuiltInAdbEngine.isConnected(this) || BuiltInAdbEngine.isPaired(this)
+        val useExternalShizuku = !useBuiltInEngine && ShizukuInstallerHelper.isReadyForPlayStoreInstall()
+
         val progressBar = ProgressBar(this).apply { isIndeterminate = true }
         val progressDialog = AlertDialog.Builder(this)
             .setTitle("Cloning ${cloneInfo.originalAppName}...")
             .setMessage(
-                if (usePlayStoreMode) {
+                if (useBuiltInEngine || useExternalShizuku) {
                     "Building ${cloneInfo.clonePackageName} & installing with Play Store source (com.android.vending)..."
                 } else {
                     "Generating separate package (${cloneInfo.clonePackageName}) & creating new badged icon..."
@@ -532,20 +613,39 @@ class MainActivity : AppCompatActivity() {
                 CloneStorageManager.saveNewClone(this, cloneInfo)
                 pendingCloneForShortcut = cloneInfo
 
-                if (usePlayStoreMode) {
-                    val installResult = ShizukuInstallerHelper.installWithPlayStoreSource(
+                // Priority 1: Built-In Zero-Root Wireless ADB Engine (No external Shizuku needed)
+                if (useBuiltInEngine) {
+                    val adbResult = BuiltInAdbEngine.installClonedApksWithPlayStoreSource(
                         this,
                         result.outputApkFiles
                     )
-                    if (installResult.isSuccess) {
+                    if (adbResult.isSuccess) {
                         runOnUiThread {
                             progressDialog.dismiss()
+                            updatePlayStoreModeUi()
                             onCloneInstalledSuccess(usedPlayStoreSource = true)
                         }
                         return@execute
                     }
                 }
 
+                // Priority 2: External Shizuku fallback if active
+                if (useExternalShizuku || ShizukuInstallerHelper.isReadyForPlayStoreInstall()) {
+                    val shizukuResult = ShizukuInstallerHelper.installWithPlayStoreSource(
+                        this,
+                        result.outputApkFiles
+                    )
+                    if (shizukuResult.isSuccess) {
+                        runOnUiThread {
+                            progressDialog.dismiss()
+                            updatePlayStoreModeUi()
+                            onCloneInstalledSuccess(usedPlayStoreSource = true)
+                        }
+                        return@execute
+                    }
+                }
+
+                // Priority 3: Standard Android PackageInstaller
                 runOnUiThread {
                     progressDialog.dismiss()
                     refreshClones()
